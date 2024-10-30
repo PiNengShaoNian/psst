@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["psst-gui"]
+
+[package]
+name = "my-psst"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
