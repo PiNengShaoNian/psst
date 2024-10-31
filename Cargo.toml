@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["psst-gui"]
+members = ["psst-core","psst-gui", "psst-protocol"]
 
 [package]
 name = "my-psst"

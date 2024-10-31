@@ -1,0 +1,11 @@
+[package]
+name = "psst-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+psst-protocol = { path = "../psst-protocol" }
+
+# Common
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = { version = "1.0.132" }

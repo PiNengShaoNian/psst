@@ -1,3 +1,6 @@
+mod data;
+
+use data::config::Config;
 use env_logger::{Builder, Env};
 
 const ENV_LOG: &str = "PSST_LOG";

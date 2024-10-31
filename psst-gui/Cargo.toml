@@ -4,5 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+psst-core = { path = "../psst-core" }
+
+# Common
 env_logger = { version = "0.11.5" }
 log = { version = "0.4.22" }
+serde = { version = "1.0.210", features = ["derive", "rc"] }
+serde_json = { version = "1.0.132" }
+
+# GUI
+druid = { git = "https://github.com/jpochyla/druid", branch = "psst", features = [
+  "im",
+  "image",
+  "jpeg",
+  "png",
+  "serde",
+] }
