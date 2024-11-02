@@ -14,4 +14,6 @@ fn main() {
             .write_style(ENV_LOG_STYLE),
     )
     .init();
+
+    let config = Config::load().unwrap_or_default();
 }
