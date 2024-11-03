@@ -1,6 +1,8 @@
 mod data;
+mod ui;
+mod widget;
 
-use data::config::Config;
+use data::{config::Config, AppState};
 use env_logger::{Builder, Env};
 
 const ENV_LOG: &str = "PSST_LOG";
@@ -16,4 +18,13 @@ fn main() {
     .init();
 
     let config = Config::load().unwrap_or_default();
+    let paginated_limit = config.paginated_limit;
+    let state = AppState::default_with_config(config);
+
+    if state.config.has_credentials() {
+        todo!();
+    } else {
+        // No configured credentials, open the account setup.
+        let window = ui::account_setup_window();
+    }
 }

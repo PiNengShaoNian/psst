@@ -1,6 +1,5 @@
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{default, fs::File, io::BufReader, path::PathBuf};
 
-use config_derived_lenses::credentials;
 use directories::ProjectDirs;
 use druid::{Data, Lens};
 use psst_core::connection::Credentials;
@@ -12,6 +11,8 @@ pub struct Config {
     #[data(ignore)]
     credentials: Option<Credentials>,
     pub audio_quality: AudioQuality,
+    pub theme: Theme,
+    pub paginated_limit: usize,
 }
 
 impl Default for Config {
@@ -19,6 +20,8 @@ impl Default for Config {
         Self {
             credentials: Default::default(),
             audio_quality: Default::default(),
+            theme: Default::default(),
+            paginated_limit: 500,
         }
     }
 }
@@ -76,5 +79,17 @@ impl Config {
         self.credentials
             .as_ref()
             .and_then(|c| c.username.as_deref())
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize)]
+pub enum Theme {
+    Light,
+    Dark,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self::Light
     }
 }
