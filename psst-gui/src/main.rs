@@ -1,8 +1,11 @@
 mod data;
+mod delegate;
 mod ui;
 mod widget;
 
 use data::{config::Config, AppState};
+use delegate::Delegate;
+use druid::AppLauncher;
 use env_logger::{Builder, Env};
 
 const ENV_LOG: &str = "PSST_LOG";
@@ -21,10 +24,20 @@ fn main() {
     let paginated_limit = config.paginated_limit;
     let state = AppState::default_with_config(config);
 
+    let delegate;
+    let launcher;
+
     if state.config.has_credentials() {
         todo!();
     } else {
         // No configured credentials, open the account setup.
         let window = ui::account_setup_window();
+        delegate = Delegate::with_preferences(window.id);
+        launcher = AppLauncher::with_window(window).configure_env(ui::theme::setup)
     }
+
+    launcher
+        .delegate(delegate)
+        .launch(state)
+        .expect("Application launch");
 }
