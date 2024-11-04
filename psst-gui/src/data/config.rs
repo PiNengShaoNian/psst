@@ -40,6 +40,7 @@ impl Default for AudioQuality {
 }
 
 const APP_NAME: &str = "Psst";
+const CONFIG_FILENAME: &str = "config.json";
 
 impl Config {
     fn project_dirs() -> Option<ProjectDirs> {
@@ -50,7 +51,7 @@ impl Config {
         Self::project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
     }
     fn config_path() -> Option<PathBuf> {
-        Self::config_dir()
+        Self::config_dir().map(|dir| dir.join(CONFIG_FILENAME))
     }
     pub fn load() -> Option<Config> {
         let path = Self::config_path().expect("Failed to get config path");
