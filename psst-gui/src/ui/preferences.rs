@@ -1,9 +1,12 @@
-use druid::{
-    widget::{Container, CrossAxisAlignment, Flex, Label, LineBreaking},
-    Widget, WidgetExt,
-};
+use std::thread::JoinHandle;
 
-use crate::data::AppState;
+use druid::{
+    widget::{Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking},
+    Event, Selector, Widget, WidgetExt,
+};
+use psst_core::{connection::Credentials, oauth};
+
+use crate::{cmd, data::AppState};
 
 use super::theme;
 
@@ -37,6 +40,72 @@ enum AccountTab {
 }
 
 fn account_tab_widget(tab: AccountTab) -> impl Widget<AppState> {
+    let mut col = Flex::column().cross_axis_alignment(match tab {
+        AccountTab::FirstSetup => CrossAxisAlignment::Center,
+        AccountTab::InPreferences => CrossAxisAlignment::Start,
+    });
+
+    if matches!(tab, AccountTab::InPreferences) {
+        col = col
+            .with_child(Label::new("Credentials").with_font(theme::UI_FONT_MEDIUM))
+            .with_spacer(theme::grid(2.0));
+    }
+
+    col = col
+        .with_child(Button::new("Log in with Spotify").on_click(|ctx, _, _| {
+            ctx.submit_command(Authenticate::REQUEST);
+        }))
+        .with_spacer(theme::grid(1.0));
     // TODO
-    Flex::row()
+
+    if matches!(tab, AccountTab::InPreferences) {
+        col = col.with_child(Button::new("Log Out").on_click(|ctx, _, _| {
+            ctx.submit_command(cmd::LOG_OUT);
+        }))
+    }
+
+    col.controller(Authenticate::new(tab))
+}
+
+struct Authenticate {
+    tab: AccountTab,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Authenticate {
+    fn new(tab: AccountTab) -> Self {
+        Self { tab, thread: None }
+    }
+}
+
+impl Authenticate {
+    const REQUEST: Selector = Selector::new("app.preferences.authenticate-request");
+    const RESPONSE: Selector<Result<Credentials, String>> =
+        Selector::new("app.preferences.authenticate-response");
+}
+
+impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::EventCtx,
+        event: &druid::Event,
+        data: &mut AppState,
+        env: &druid::Env,
+    ) {
+        match event {
+            Event::Command(cmd) if cmd.is(Self::REQUEST) => {
+                data.preferences.auth.result.defer_default();
+
+                let (auth_url, pkce_verifier) = oauth::generate_auth_url(8888);
+                if open::that(&auth_url).is_err() {
+                    data.error_alert("Failed to open browser");
+                    return;
+                }
+            }
+            _ => {
+                child.event(ctx, event, data, env);
+            }
+        }
+    }
 }

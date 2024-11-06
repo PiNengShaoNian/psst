@@ -1,7 +1,9 @@
 mod data;
 mod delegate;
+mod error;
 mod ui;
 mod widget;
+mod cmd;
 
 use data::{config::Config, AppState};
 use delegate::Delegate;

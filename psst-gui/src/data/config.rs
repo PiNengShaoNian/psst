@@ -1,9 +1,33 @@
-use std::{default, fs::File, io::BufReader, path::PathBuf};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
 use directories::ProjectDirs;
 use druid::{Data, Lens};
 use psst_core::connection::Credentials;
 use serde::{Deserialize, Serialize};
+
+use super::promise::Promise;
+
+#[derive(Clone, Debug, Data, Lens)]
+pub struct Preferences {
+    pub active: PreferencesTab,
+    pub auth: Authentication,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Data)]
+pub enum PreferencesTab {
+    General,
+    Account,
+    Cache,
+    About,
+}
+
+#[derive(Clone, Debug, Data, Lens)]
+pub struct Authentication {
+    pub username: String,
+    pub password: String,
+    pub access_token: String,
+    pub result: Promise<(), (), String>,
+}
 
 #[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
 #[serde(default)]
