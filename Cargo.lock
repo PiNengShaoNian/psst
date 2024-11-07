@@ -1842,6 +1842,7 @@ dependencies = [
 name = "psst-core"
 version = "0.1.0"
 dependencies = [
+ "log",
  "oauth2",
  "psst-protocol",
  "serde",

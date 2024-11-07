@@ -1,8 +1,13 @@
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{
+    env::{self, VarError},
+    fs::File,
+    io::BufReader,
+    path::PathBuf,
+};
 
 use directories::ProjectDirs;
 use druid::{Data, Lens};
-use psst_core::connection::Credentials;
+use psst_core::{connection::Credentials, session::SessionConfig};
 use serde::{Deserialize, Serialize};
 
 use super::promise::Promise;
@@ -28,6 +33,24 @@ pub struct Authentication {
     pub access_token: String,
     pub result: Promise<(), (), String>,
 }
+
+impl Authentication {
+    pub fn session_config(&self) -> SessionConfig {
+        SessionConfig {
+            login_creds: if !self.access_token.is_empty() {
+                Credentials::from_access_token(self.access_token.clone())
+            } else {
+                Credentials::from_username_and_password(
+                    self.username.clone(),
+                    self.password.clone(),
+                )
+            },
+            proxy_url: Config::proxy(),
+        }
+    }
+}
+
+const PROXY_ENV_VAR: &str = "SOCKS_PROXY";
 
 #[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
 #[serde(default)]
@@ -104,6 +127,19 @@ impl Config {
         self.credentials
             .as_ref()
             .and_then(|c| c.username.as_deref())
+    }
+
+    pub fn proxy() -> Option<String> {
+        env::var(PROXY_ENV_VAR).map_or_else(
+            |err| match err {
+                VarError::NotPresent => None,
+                VarError::NotUnicode(_) => {
+                    log::error!("proxy URL is not a valid unicode");
+                    None
+                }
+            },
+            Some,
+        )
     }
 }
 

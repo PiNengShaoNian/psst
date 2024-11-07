@@ -1,4 +1,7 @@
-use std::thread::JoinHandle;
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    thread::{self, JoinHandle},
+};
 
 use druid::{
     widget::{Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking},
@@ -102,6 +105,23 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                     data.error_alert("Failed to open browser");
                     return;
                 }
+
+                let config = data.preferences.auth.session_config();
+                let widget_id = ctx.widget_id();
+                let event_sink = ctx.get_external_handle();
+                let thread = thread::spawn(move || {
+                    match oauth::get_authcode_listener(
+                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888),
+                        std::time::Duration::from_secs(300),
+                    ) {
+                        Ok(code) => {
+                            todo!()
+                        }
+                        Err(e) => {
+                            todo!()
+                        }
+                    }
+                });
             }
             _ => {
                 child.event(ctx, event, data, env);

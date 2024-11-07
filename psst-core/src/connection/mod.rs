@@ -10,6 +10,24 @@ pub struct Credentials {
     pub auth_type: AuthenticationType,
 }
 
+impl Credentials {
+    pub fn from_username_and_password(username: String, password: String) -> Self {
+        Self {
+            username: Some(username),
+            auth_type: AuthenticationType::AUTHENTICATION_USER_PASS,
+            auth_data: password.into_bytes(),
+        }
+    }
+
+    pub fn from_access_token(token: String) -> Self {
+        Self {
+            username: None,
+            auth_type: AuthenticationType::AUTHENTICATION_SPOTIFY_TOKEN,
+            auth_data: token.into_bytes(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct SerializedCredentials {
     username: String,

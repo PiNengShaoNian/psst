@@ -1,11 +1,74 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    io::{BufRead, BufReader, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    sync::mpsc,
+    time::Duration,
+};
 
 use oauth2::{
-    basic::BasicClient, AuthUrl, ClientId, CsrfToken, PkceCodeChallenge, PkceCodeVerifier,
-    RedirectUrl, Scope, TokenUrl,
+    basic::BasicClient, url::Url, AuthUrl, AuthorizationCode, ClientId, CsrfToken,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
 };
 
 use crate::session::access_token::CLIENT_ID;
+
+pub fn get_authcode_listener(
+    socket_address: SocketAddr,
+    timeout: Duration,
+) -> Result<AuthorizationCode, String> {
+    log::info!("Starting OAuth listener on {:?}", socket_address);
+    let listener = TcpListener::bind(socket_address)
+        .map_err(|e| format!("Failed to bind to address: {}", e))?;
+    log::info!("Listener bound successfully");
+
+    let (tx, rx) = mpsc::channel();
+
+    let handle = std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            handle_connection(&mut stream, &tx);
+        }
+    });
+
+    let result = rx
+        .recv_timeout(timeout)
+        .map_err(|_| "Timed out waiting for authorization code".to_string())?;
+
+    handle
+        .join()
+        .map_err(|_| "Failed to join server thread".to_string())?;
+
+    result
+}
+
+fn handle_connection(stream: &mut TcpStream, tx: &mpsc::Sender<Result<AuthorizationCode, String>>) {
+    let mut reader = BufReader::new(&mut *stream);
+    let mut request_line = String::new();
+
+    if reader.read_line(&mut request_line).is_ok() {
+        if let Some(code) = extract_code_from_request(&request_line) {
+            send_success_response(stream);
+            let _ = tx.send(Ok(code));
+        } else {
+            let _ = tx.send(Err("Failed to extract code from request".to_string()));
+        }
+    }
+}
+
+fn extract_code_from_request(request_line: &str) -> Option<AuthorizationCode> {
+    request_line.split_whitespace().nth(1).and_then(|path| {
+        Url::parse(&format!("http://localhost{}", path))
+            .ok()?
+            .query_pairs()
+            .find(|(key, _)| key == "code")
+            .map(|(_, code)| AuthorizationCode::new(code.into_owned()))
+    })
+}
+
+fn send_success_response(stream: &mut TcpStream) {
+    let response =
+        "HTTP/1.1 200 OK\r\n\r\n<html><body>You can close this window now.</body></html>";
+    let _ = stream.write_all(response.as_bytes());
+}
 
 fn create_spotify_oauth_client(redirect_port: u16) -> BasicClient {
     let redirect_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), redirect_port);

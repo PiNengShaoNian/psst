@@ -7,6 +7,7 @@ edition = "2021"
 psst-protocol = { path = "../psst-protocol" }
 
 # Common
+log = { version = "0.4.22" }
 oauth2 = { version = "4.4.2" }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = { version = "1.0.132" }
