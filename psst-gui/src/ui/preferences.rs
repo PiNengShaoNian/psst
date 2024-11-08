@@ -7,6 +7,7 @@ use druid::{
     widget::{Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking},
     Event, Selector, Widget, WidgetExt,
 };
+use log::info;
 use psst_core::{connection::Credentials, oauth};
 
 use crate::{cmd, data::AppState};
@@ -115,6 +116,8 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                         std::time::Duration::from_secs(300),
                     ) {
                         Ok(code) => {
+                            let token = oauth::exchange_code_for_token(8888, code, pkce_verifier);
+                            info!("token: {}", token);
                             todo!()
                         }
                         Err(e) => {

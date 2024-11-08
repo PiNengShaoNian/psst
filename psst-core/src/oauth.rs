@@ -6,8 +6,7 @@ use std::{
 };
 
 use oauth2::{
-    basic::BasicClient, url::Url, AuthUrl, AuthorizationCode, ClientId, CsrfToken,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
+    basic::BasicClient, reqwest::http_client, url::Url, AuthUrl, AuthorizationCode, ClientId, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl
 };
 
 use crate::session::access_token::CLIENT_ID;
@@ -94,6 +93,22 @@ pub fn generate_auth_url(redirect_port: u16) -> (String, PkceCodeVerifier) {
         .url();
 
     (auth_url.to_string(), pkce_verifier)
+}
+
+pub fn exchange_code_for_token(
+    redirect_port: u16,
+    code: AuthorizationCode,
+    pkce_verifier: PkceCodeVerifier,
+) -> String {
+    let client = create_spotify_oauth_client(redirect_port);
+
+    let token_response = client
+        .exchange_code(code)
+        .set_pkce_verifier(pkce_verifier)
+        .request(http_client)
+        .expect("Failed to exchange code for token");
+
+    token_response.access_token().secret().to_string()
 }
 
 fn get_scopes() -> Vec<Scope> {
