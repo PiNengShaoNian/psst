@@ -8,9 +8,12 @@ use druid::{
     Event, Selector, Widget, WidgetExt,
 };
 use log::info;
-use psst_core::{connection::Credentials, oauth};
+use psst_core::{connection::Credentials, oauth, session::SessionConfig};
 
-use crate::{cmd, data::AppState};
+use crate::{
+    cmd,
+    data::{config::Authentication, AppState},
+};
 
 use super::theme;
 
@@ -117,7 +120,12 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                     ) {
                         Ok(code) => {
                             let token = oauth::exchange_code_for_token(8888, code, pkce_verifier);
-                            info!("token: {}", token);
+                            let response =
+                                Authentication::authenticate_and_get_credentials(SessionConfig {
+                                    login_creds: Credentials::from_access_token(token),
+                                    ..config
+                                });
+                            info!("token: {:?}", response);
                             todo!()
                         }
                         Err(e) => {

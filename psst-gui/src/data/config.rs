@@ -7,7 +7,7 @@ use std::{
 
 use directories::ProjectDirs;
 use druid::{Data, Lens};
-use psst_core::{connection::Credentials, session::SessionConfig};
+use psst_core::{connection::Credentials, session::{SessionConfig, SessionConnection}};
 use serde::{Deserialize, Serialize};
 
 use super::promise::Promise;
@@ -47,6 +47,11 @@ impl Authentication {
             },
             proxy_url: Config::proxy(),
         }
+    }
+
+    pub fn authenticate_and_get_credentials(config: SessionConfig) -> Result<Credentials, String> {
+        let connection = SessionConnection::open(config).map_err(|err| err.to_string())?;
+        Ok(connection.credentials)
     }
 }
 
