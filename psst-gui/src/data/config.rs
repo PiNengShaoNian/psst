@@ -1,13 +1,17 @@
 use std::{
     env::{self, VarError},
-    fs::File,
-    io::BufReader,
+    fs::{File, OpenOptions},
+    io::{BufReader, BufWriter},
     path::PathBuf,
 };
 
 use directories::ProjectDirs;
 use druid::{Data, Lens};
-use psst_core::{connection::Credentials, session::{SessionConfig, SessionConnection}};
+use psst_core::{
+    cache::mkdir_if_not_exists,
+    connection::Credentials,
+    session::{SessionConfig, SessionConnection},
+};
 use serde::{Deserialize, Serialize};
 
 use super::promise::Promise;
@@ -114,6 +118,23 @@ impl Config {
         } else {
             None
         }
+    }
+
+    pub fn save(&self) {
+        let dir = Self::config_dir().expect("Failed to get config dir");
+        let path = Self::config_path().expect("Failed to get config path");
+        mkdir_if_not_exists(&dir).expect("Failed to create config dir");
+
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(target_family = "unix")]
+        options.mode(0o600);
+
+        let file = options.open(&path).expect("Failed to create config");
+        let writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(writer, self).expect("Failed to write config");
+        log::info!("saved config: {:?}", &path);
     }
 
     pub fn has_credentials(&self) -> bool {

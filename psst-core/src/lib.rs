@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod cdn;
 pub mod connection;
 pub mod error;
