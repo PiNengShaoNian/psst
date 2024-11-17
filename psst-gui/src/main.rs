@@ -1,14 +1,16 @@
+mod cmd;
 mod data;
 mod delegate;
 mod error;
 mod ui;
+mod webapi;
 mod widget;
-mod cmd;
 
 use data::{config::Config, AppState};
 use delegate::Delegate;
 use druid::AppLauncher;
 use env_logger::{Builder, Env};
+use webapi::WebApi;
 
 const ENV_LOG: &str = "PSST_LOG";
 const ENV_LOG_STYLE: &str = "PSST_LOG_STYLE";
@@ -25,6 +27,13 @@ fn main() {
     let config = Config::load().unwrap_or_default();
     let paginated_limit = config.paginated_limit;
     let state = AppState::default_with_config(config);
+    WebApi::new(
+        state.session.clone(),
+        Config::proxy().as_deref(),
+        Config::cache_dir(),
+        paginated_limit,
+    )
+    .install_as_global();
 
     let delegate;
     let launcher;

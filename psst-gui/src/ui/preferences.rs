@@ -4,6 +4,7 @@ use std::{
 };
 
 use druid::{
+    commands,
     widget::{Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking},
     Event, Selector, Widget, WidgetExt,
 };
@@ -12,7 +13,7 @@ use psst_core::{connection::Credentials, oauth, session::SessionConfig};
 
 use crate::{
     cmd,
-    data::{config::Authentication, AppState},
+    data::{config::Authentication, AppState}, webapi::WebApi,
 };
 
 use super::theme;
@@ -125,14 +126,47 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                                     login_creds: Credentials::from_access_token(token),
                                     ..config
                                 });
-                            info!("token: {:?}", response);
-                            todo!()
+                            event_sink
+                                .submit_command(Self::RESPONSE, response, widget_id)
+                                .unwrap();
                         }
                         Err(e) => {
-                            todo!()
+                            event_sink
+                                .submit_command(Self::RESPONSE, Err(e), widget_id)
+                                .unwrap();
                         }
                     }
                 });
+            }
+            Event::Command(cmd) if cmd.is(Self::RESPONSE) => {
+                self.thread.take();
+
+                let result = cmd
+                    .get_unchecked(Self::RESPONSE)
+                    .to_owned()
+                    .map(|credentials| {
+                        let username = credentials.username.clone().unwrap_or_default();
+                        WebApi::global().load_local_tracks(&username);
+                        data.config.store_credentials(credentials);
+                        data.config.save();
+                    });
+                let is_ok = result.is_ok();
+
+                data.preferences.auth.result.resolve_or_reject((), result);
+
+                if is_ok {
+                    match &self.tab {
+                        AccountTab::FirstSetup => {
+                            ctx.submit_command(cmd::SHOW_MAIN);
+                            ctx.submit_command(commands::CLOSE_WINDOW);
+                        }
+                        AccountTab::InPreferences => {
+                            ctx.submit_command(cmd::SESSION_CONNECT);
+                        }
+                    }
+                }
+                data.preferences.auth.access_token.clear();
+                ctx.set_handled();
             }
             _ => {
                 child.event(ctx, event, data, env);

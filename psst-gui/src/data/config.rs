@@ -103,6 +103,17 @@ impl Config {
         ProjectDirs::from("", "", APP_NAME)
     }
 
+    pub fn spotify_local_files_file(username: &str) -> Option<PathBuf> {
+        ProjectDirs::from("", "", "spotify").map(|dirs| {
+            let path = format!("Users/{}-user/local-files.bnk", username);
+            dirs.config_dir().join(path)
+        })
+    }
+
+    pub fn cache_dir() -> Option<PathBuf> {
+        Self::project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
+    }
+
     pub fn config_dir() -> Option<PathBuf> {
         Self::project_dirs().map(|dirs| dirs.cache_dir().to_path_buf())
     }

@@ -13,11 +13,14 @@ use std::{
 use config::{Authentication, Preferences, PreferencesTab};
 use druid::{im::Vector, Data, Lens};
 use promise::Promise;
+use psst_core::session::SessionService;
 
 pub use crate::data::config::Config;
 
 #[derive(Clone, Data, Lens)]
 pub struct AppState {
+    #[data(ignore)]
+    pub session: SessionService,
     pub config: Config,
     pub preferences: Preferences,
     pub alerts: Vector<Alert>,
@@ -26,6 +29,7 @@ pub struct AppState {
 impl AppState {
     pub fn default_with_config(config: Config) -> Self {
         Self {
+            session: SessionService::empty(),
             config,
             preferences: Preferences {
                 active: PreferencesTab::General,
