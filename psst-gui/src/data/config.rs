@@ -6,13 +6,15 @@ use std::{
 };
 
 use directories::ProjectDirs;
-use druid::{Data, Lens};
+use druid::{Data, Lens, Size};
 use psst_core::{
     cache::mkdir_if_not_exists,
     connection::Credentials,
     session::{SessionConfig, SessionConnection},
 };
 use serde::{Deserialize, Serialize};
+
+use crate::ui::theme;
 
 use super::promise::Promise;
 
@@ -68,6 +70,7 @@ pub struct Config {
     credentials: Option<Credentials>,
     pub audio_quality: AudioQuality,
     pub theme: Theme,
+    pub window_size: Size,
     pub paginated_limit: usize,
 }
 
@@ -77,6 +80,7 @@ impl Default for Config {
             credentials: Default::default(),
             audio_quality: Default::default(),
             theme: Default::default(),
+            window_size: Size::new(theme::grid(80.0), theme::grid(100.0)),
             paginated_limit: 500,
         }
     }

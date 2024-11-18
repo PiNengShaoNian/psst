@@ -1,9 +1,25 @@
 pub mod preferences;
 pub mod theme;
 
-use druid::{Widget, WidgetExt, WindowDesc};
+use druid::{widget::SizedBox, Widget, WidgetExt, WindowDesc};
 
-use crate::{data::AppState, widget::theme::ThemeScope};
+use crate::{
+    data::{AppState, Config},
+    widget::theme::ThemeScope,
+};
+
+pub fn main_window(config: &Config) -> WindowDesc<AppState> {
+    let win = WindowDesc::new(root_widget())
+        .with_min_size((theme::grid(65.0), theme::grid(50.0)))
+        .window_size(config.window_size)
+        .show_title(false)
+        .transparent_titlebar(true);
+    if cfg!(target_os = "macos") {
+        todo!()
+    } else {
+        win
+    }
+}
 
 pub fn account_setup_window() -> WindowDesc<AppState> {
     let win = WindowDesc::new(account_setup_widget())
@@ -27,4 +43,8 @@ fn account_setup_widget() -> impl Widget<AppState> {
             .background(theme::BACKGROUND_DARK)
             .expand(),
     )
+}
+
+fn root_widget() -> impl Widget<AppState> {
+    SizedBox::empty()
 }
