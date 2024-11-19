@@ -9,6 +9,36 @@ pub enum Promise<T: Data, D: Data = (), E: Data = Error> {
     Rejected { def: D, err: E },
 }
 
+#[derive(Eq, PartialEq, Debug)]
+pub enum PromiseState {
+    Empty,
+    Deferred,
+    Resolved,
+    Rejected,
+}
+
+impl<T: Data, D: Data, E: Data> Promise<T, D, E> {
+    pub fn state(&self) -> PromiseState {
+        match self {
+            Self::Empty => PromiseState::Empty,
+            Self::Deferred { .. } => PromiseState::Deferred,
+            Self::Resolved { .. } => PromiseState::Resolved,
+            Self::Rejected { .. } => PromiseState::Rejected,
+        }
+    }
+
+    pub fn is_resolved(&self) -> bool {
+        self.state() == PromiseState::Resolved
+    }
+
+    pub fn is_deferred(&self, d: &D) -> bool
+    where
+        D: PartialEq,
+    {
+        matches!(self, Self::Deferred { def } if def == d)
+    }
+}
+
 impl<D: Data + Default, T: Data, E: Data> Promise<T, D, E> {
     pub fn defer_default(&mut self) {
         *self = Self::Deferred { def: D::default() }

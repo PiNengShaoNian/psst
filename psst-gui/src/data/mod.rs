@@ -10,9 +10,9 @@ use std::{
     time::Instant,
 };
 
+pub use crate::data::promise::{Promise, PromiseState};
 use config::{Authentication, Preferences, PreferencesTab};
 use druid::{im::Vector, Data, Lens};
-use promise::Promise;
 use psst_core::session::SessionService;
 
 pub use crate::data::config::Config;
