@@ -1,4 +1,7 @@
 pub mod config;
+mod ctx;
+mod nav;
+mod playlist;
 mod promise;
 
 use std::{
@@ -10,7 +13,12 @@ use std::{
     time::Instant,
 };
 
-pub use crate::data::promise::{Promise, PromiseState};
+pub use crate::data::{
+    ctx::Ctx,
+    nav::Nav,
+    playlist::{Playlist, PlaylistLink},
+    promise::{Promise, PromiseState},
+};
 use config::{Authentication, Preferences, PreferencesTab};
 use druid::{im::Vector, Data, Lens};
 use psst_core::session::SessionService;
@@ -23,11 +31,19 @@ pub struct AppState {
     pub session: SessionService,
     pub config: Config,
     pub preferences: Preferences,
+    pub library: Arc<Library>,
+    pub common_ctx: Arc<CommonCtx>,
     pub alerts: Vector<Alert>,
 }
 
 impl AppState {
     pub fn default_with_config(config: Config) -> Self {
+        let library = Arc::new(Library {
+            playlists: Promise::Empty,
+        });
+        let common_ctx = Arc::new(CommonCtx {
+            show_track_cover: config.show_track_cover,
+        });
         Self {
             session: SessionService::empty(),
             config,
@@ -40,6 +56,8 @@ impl AppState {
                     result: Promise::Empty,
                 },
             },
+            library,
+            common_ctx,
             alerts: Vector::new(),
         }
     }
@@ -59,6 +77,18 @@ impl AppState {
         self.add_alert(message, AlertStyle::Error);
     }
 }
+
+#[derive(Clone, Data, Lens)]
+pub struct Library {
+    pub playlists: Promise<Vector<Playlist>>,
+}
+
+#[derive(Clone, Data)]
+pub struct CommonCtx {
+    pub show_track_cover: bool,
+}
+
+pub type WithCtx<T> = Ctx<Arc<CommonCtx>, T>;
 
 static ALERT_ID: AtomicUsize = AtomicUsize::new(0);
 

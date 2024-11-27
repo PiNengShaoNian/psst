@@ -70,6 +70,7 @@ pub struct Config {
     credentials: Option<Credentials>,
     pub audio_quality: AudioQuality,
     pub theme: Theme,
+    pub show_track_cover: bool,
     pub window_size: Size,
     pub paginated_limit: usize,
 }
@@ -80,6 +81,7 @@ impl Default for Config {
             credentials: Default::default(),
             audio_quality: Default::default(),
             theme: Default::default(),
+            show_track_cover: Default::default(),
             window_size: Size::new(theme::grid(80.0), theme::grid(100.0)),
             paginated_limit: 500,
         }
