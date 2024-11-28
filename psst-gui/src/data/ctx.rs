@@ -1,4 +1,9 @@
-use druid::{lens::Field, Data, Lens, LensExt};
+use druid::{
+    lens::{Field, Map},
+    Data, Lens, LensExt,
+};
+
+use super::Promise;
 
 #[derive(Clone, Data)]
 pub struct Ctx<C, T> {
@@ -58,5 +63,47 @@ where
         self.cl.put(data, ct.ctx);
         self.tl.put(data, ct.data);
         v
+    }
+}
+
+impl<C, PT, PD, PE> Ctx<C, Promise<PT, PD, PE>>
+where
+    C: Data,
+    PT: Data,
+    PD: Data,
+    PE: Data,
+{
+    pub fn in_promise() -> impl Lens<Self, Promise<Ctx<C, PT>, PD, PE>> {
+        Map::new(
+            |c: &Self| match &c.data {
+                Promise::Empty => Promise::Empty,
+                Promise::Deferred { def } => Promise::Deferred {
+                    def: def.to_owned(),
+                },
+                Promise::Resolved { def, val } => Promise::Resolved {
+                    def: def.to_owned(),
+                    val: Ctx::new(c.ctx.to_owned(), val.to_owned()),
+                },
+                Promise::Rejected { def, err } => Promise::Rejected {
+                    def: def.to_owned(),
+                    err: err.to_owned(),
+                },
+            },
+            |c: &mut Self, p: Promise<Ctx<C, PT>, PD, PE>| match p {
+                Promise::Empty => {
+                    c.data = Promise::Empty;
+                }
+                Promise::Deferred { def } => {
+                    c.data = Promise::Deferred { def };
+                }
+                Promise::Resolved { def, val } => {
+                    c.data = Promise::Resolved { def, val: val.data };
+                    c.ctx = val.ctx;
+                }
+                Promise::Rejected { def, err } => {
+                    c.data = Promise::Rejected { def, err };
+                }
+            },
+        )
     }
 }
