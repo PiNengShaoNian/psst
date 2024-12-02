@@ -1,9 +1,27 @@
 pub mod access_token;
+pub mod audio_key;
+pub mod mercury;
 
-use std::sync::{Arc, Mutex};
+use audio_key::AudioKeyDispatcher;
+use parking_lot::Mutex;
+use std::{
+    io,
+    net::{Shutdown, TcpStream},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::{self, JoinHandle},
+};
+
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use mercury::{MercuryDispatcher, MercuryRequest, MercuryResponse};
 
 use crate::{
-    connection::{Credentials, Transport},
+    connection::{
+        shannon_codec::{ShannonDecoder, ShannonEncoder, ShannonMsg},
+        Credentials, Transport,
+    },
     error::Error,
 };
 
@@ -21,6 +39,7 @@ pub struct SessionConfig {
 /// request.
 #[derive(Clone)]
 pub struct SessionService {
+    connected: Arc<Mutex<Option<SessionWorker>>>,
     config: Arc<Mutex<Option<SessionConfig>>>,
 }
 
@@ -29,8 +48,35 @@ impl SessionService {
     /// session, a config needs to be set up first using `update_config`.
     pub fn empty() -> Self {
         Self {
+            connected: Arc::default(),
             config: Arc::default(),
         }
+    }
+
+    /// Return a handle for the connected session.  In case no connection is
+    /// open, *synchronously* connect, start the worker and keep it as active.
+    /// Although a lock is held for the whole duration  of connection setup,
+    /// `SessionConnection::open` has an internal timeout, and should give up in
+    /// a timely manner.
+    pub fn connected(&self) -> Result<SessionHandle, Error> {
+        let mut connected = self.connected.lock();
+        let is_connected_and_not_terminated =
+            matches!(connected.as_ref(), Some(worker) if !worker.has_terminated());
+        if !is_connected_and_not_terminated {
+            let connection = SessionConnection::open(
+                self.config
+                    .lock()
+                    .as_ref()
+                    .ok_or(Error::SessionDisconnected)?
+                    .clone(),
+            )?;
+            let worker = SessionWorker::run(connection.transport);
+            connected.replace(worker);
+        }
+        connected
+            .as_ref()
+            .map(SessionWorker::handle)
+            .ok_or(Error::SessionDisconnected)
     }
 }
 
@@ -59,4 +105,192 @@ impl SessionConnection {
             transport,
         })
     }
+}
+
+pub struct SessionWorker {
+    sender: Sender<DispatchCmd>,
+    decoding_thread: JoinHandle<()>,
+    encoding_thread: JoinHandle<()>,
+    dispatching_thread: JoinHandle<()>,
+    terminated: Arc<AtomicBool>,
+}
+
+impl SessionWorker {
+    pub fn run(transport: Transport) -> Self {
+        let (disp_send, disp_recv) = unbounded();
+        let (msg_send, msg_recv) = unbounded();
+        let terminated = Arc::new(AtomicBool::new(false));
+        Self {
+            decoding_thread: {
+                let decoder = transport.decoder;
+                let disp_send = disp_send.clone();
+                thread::spawn(move || decode_shannon_messages(decoder, disp_send))
+            },
+            encoding_thread: {
+                let encoder = transport.encoder;
+                let disp_send = disp_send.clone();
+                thread::spawn(move || encode_shannon_messages(encoder, msg_recv, disp_send))
+            },
+            dispatching_thread: {
+                let stream = transport.stream;
+                let terminated = terminated.clone();
+                thread::spawn(move || {
+                    dispatch_messages(disp_recv, msg_send, stream);
+                    terminated.store(true, Ordering::SeqCst);
+                })
+            },
+            sender: disp_send,
+            terminated,
+        }
+    }
+
+    pub fn handle(&self) -> SessionHandle {
+        SessionHandle {
+            sender: self.sender.clone(),
+        }
+    }
+
+    pub fn join(self) {
+        if let Err(err) = self.dispatching_thread.join() {
+            log::error!("session dispatching thread panicked: {:?}", err);
+        }
+        if let Err(err) = self.encoding_thread.join() {
+            log::error!("session encoding thread panicked: {:?}", err);
+        }
+        if let Err(err) = self.decoding_thread.join() {
+            log::error!("session decoding thread panicked: {:?}", err);
+        }
+    }
+
+    pub fn has_terminated(&self) -> bool {
+        self.terminated.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Clone)]
+pub struct SessionHandle {
+    sender: Sender<DispatchCmd>,
+}
+
+/// Read Shannon messages from the TCP stream one by one and send them to
+/// dispatcher for further processing.  In case the decoding fails with an error
+/// (this happens also in case we explicitly shutdown the connection), report
+/// the error to the dispatcher and quit.  If the dispatcher has already dropped
+/// its receiving part, quit silently as well.
+fn decode_shannon_messages(mut decoder: ShannonDecoder<TcpStream>, dispatch: Sender<DispatchCmd>) {
+    loop {
+        match decoder.decode() {
+            Ok(msg) => {
+                if dispatch.send(DispatchCmd::DecodedMsg(msg)).is_err() {
+                    break;
+                }
+            }
+            Err(err) => {
+                let _ = dispatch.send(DispatchCmd::DecoderError(err));
+                break;
+            }
+        };
+    }
+}
+
+/// Receive Shannon messages from `messages` and encode them into the TCP stream
+/// through `encoder`.  In case the encoding fails with an error (this happens
+/// also in case we explicitly shutdown the connection), report the error to the
+/// dispatcher and quit.  If the dispatcher has already dropped the
+/// corresponding sender of `messages`, quit as well.
+fn encode_shannon_messages(
+    mut encoder: ShannonEncoder<TcpStream>,
+    messages: Receiver<ShannonMsg>,
+    dispatch: Sender<DispatchCmd>,
+) {
+    for msg in messages {
+        match encoder.encode(msg) {
+            Ok(_) => {
+                // Message encoded, continue.
+            }
+            Err(err) => {
+                let _ = dispatch.send(DispatchCmd::EncoderError(err));
+                break;
+            }
+        }
+    }
+}
+
+enum DispatchCmd {
+    MercuryReq {
+        request: MercuryRequest,
+        callback: Sender<MercuryResponse>,
+    },
+    CountryCodeReq {
+        callback: Sender<Option<String>>,
+    },
+    DecodedMsg(ShannonMsg),
+    DecoderError(io::Error),
+    EncoderError(io::Error),
+    Shutdown,
+}
+
+fn dispatch_messages(
+    dispatch: Receiver<DispatchCmd>,
+    messages: Sender<ShannonMsg>,
+    stream: TcpStream,
+) {
+    let mut mercury = MercuryDispatcher::new();
+    let mut audio_key = AudioKeyDispatcher::new();
+    let mut country_code = None;
+
+    for disp in dispatch {
+        match disp {
+            DispatchCmd::MercuryReq { request, callback } => {
+                let msg = mercury.enqueue_request(request, callback);
+                let _ = messages.send(msg);
+            }
+            DispatchCmd::CountryCodeReq { callback } => {
+                let _ = callback.send(country_code.clone());
+            }
+            DispatchCmd::DecodedMsg(msg) if msg.cmd == ShannonMsg::PING => {
+                let _ = messages.send(pong_message());
+            }
+            DispatchCmd::DecodedMsg(msg) if msg.cmd == ShannonMsg::COUNTRY_CODE => {
+                country_code.replace(parse_country_code(msg).unwrap());
+            }
+            DispatchCmd::DecodedMsg(msg) if msg.cmd == ShannonMsg::AES_KEY => {
+                audio_key.handle_aes_key(msg)
+            }
+            DispatchCmd::DecodedMsg(msg) if msg.cmd == ShannonMsg::AES_KEY_ERROR => {
+                audio_key.handle_aes_key_error(msg)
+            }
+            DispatchCmd::DecodedMsg(msg) if msg.cmd == ShannonMsg::MERCURY_REQ => {
+                mercury.handle_mercury_req(msg)
+            }
+            DispatchCmd::DecodedMsg(msg) => {
+                log::debug!("ignored message: {:?}", msg.cmd);
+            }
+            DispatchCmd::DecoderError(err) => {
+                log::error!("connection error: {:?}", err);
+                let _ = stream.shutdown(Shutdown::Write);
+                break;
+            }
+            DispatchCmd::EncoderError(err) => {
+                log::error!("connection error: {:?}", err);
+                let _ = stream.shutdown(Shutdown::Read);
+                break;
+            }
+            DispatchCmd::Shutdown => {
+                log::info!("connection shutdown");
+                let _ = stream.shutdown(Shutdown::Both);
+                break;
+            }
+        }
+    }
+}
+
+fn pong_message() -> ShannonMsg {
+    ShannonMsg::new(ShannonMsg::PONG, vec![0, 0, 0, 0])
+}
+
+fn parse_country_code(msg: ShannonMsg) -> Result<String, Error> {
+    String::from_utf8(msg.payload)
+        .ok()
+        .ok_or(Error::UnexpectedResponse)
 }
