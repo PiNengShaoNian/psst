@@ -4,6 +4,8 @@ pub mod mercury;
 
 use audio_key::AudioKeyDispatcher;
 use parking_lot::Mutex;
+use quick_protobuf::MessageRead;
+use serde::de::DeserializeOwned;
 use std::{
     io,
     net::{Shutdown, TcpStream},
@@ -18,11 +20,10 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use mercury::{MercuryDispatcher, MercuryRequest, MercuryResponse};
 
 use crate::{
-    connection::{
+    audio::decrypt::AudioKey, connection::{
         shannon_codec::{ShannonDecoder, ShannonEncoder, ShannonMsg},
         Credentials, Transport,
-    },
-    error::Error,
+    }, error::Error, item_id::{FileId, ItemId}, util::deserialize_protobuf
 };
 
 /// Configuration values needed to open the session connection.
@@ -167,9 +168,71 @@ impl SessionWorker {
     }
 }
 
+
 #[derive(Clone)]
 pub struct SessionHandle {
     sender: Sender<DispatchCmd>,
+}
+
+impl SessionHandle {
+    pub fn get_mercury_protobuf<T>(&self, uri: String) -> Result<T, Error>
+    where
+        T: MessageRead<'static>,
+    {
+        let payload = self.get_mercury_bytes(uri)?;
+        let message = deserialize_protobuf(&payload)?;
+        Ok(message)
+    }
+
+    pub fn get_mercury_json<T>(&self, uri: String) -> Result<T, Error>
+    where
+        T: DeserializeOwned,
+    {
+        let payload = self.get_mercury_bytes(uri)?;
+        let message = serde_json::from_slice(&payload)?;
+        Ok(message)
+    }
+
+    pub fn get_mercury_bytes(&self, uri: String) -> Result<Vec<u8>, Error> {
+        let (callback, receiver) = unbounded();
+        let request = MercuryRequest::get(uri);
+        self.sender
+            .send(DispatchCmd::MercuryReq { callback, request })
+            .ok()
+            .ok_or(Error::SessionDisconnected)?;
+        let response = receiver.recv().ok().ok_or(Error::SessionDisconnected)?;
+        let first_part = response
+            .payload
+            .into_iter()
+            .next()
+            .ok_or(Error::UnexpectedResponse)?;
+        Ok(first_part)
+    }
+
+    pub fn get_audio_key(&self, track: ItemId, file: FileId) -> Result<AudioKey, Error> {
+        let (callback, receiver) = unbounded();
+        self.sender
+            .send(DispatchCmd::AudioKeyReq {
+                callback,
+                track,
+                file,
+            })
+            .ok()
+            .ok_or(Error::SessionDisconnected)?;
+        receiver.recv().ok().ok_or(Error::SessionDisconnected)?
+    }
+
+    pub fn get_country_code(&self) -> Option<String> {
+        let (callback, receiver) = unbounded();
+        self.sender
+            .send(DispatchCmd::CountryCodeReq { callback })
+            .ok()?;
+        receiver.recv().ok()?
+    }
+
+    pub fn request_shutdown(&self) {
+        let _ = self.sender.send(DispatchCmd::Shutdown);
+    }
 }
 
 /// Read Shannon messages from the TCP stream one by one and send them to
@@ -221,6 +284,11 @@ enum DispatchCmd {
         request: MercuryRequest,
         callback: Sender<MercuryResponse>,
     },
+    AudioKeyReq {
+        track: ItemId,
+        file: FileId,
+        callback: Sender<Result<AudioKey, Error>>,
+    },
     CountryCodeReq {
         callback: Sender<Option<String>>,
     },
@@ -243,6 +311,14 @@ fn dispatch_messages(
         match disp {
             DispatchCmd::MercuryReq { request, callback } => {
                 let msg = mercury.enqueue_request(request, callback);
+                let _ = messages.send(msg);
+            }
+            DispatchCmd::AudioKeyReq {
+                track,
+                file,
+                callback,
+            } => {
+                let msg = audio_key.enqueue_request(track, file, callback);
                 let _ = messages.send(msg);
             }
             DispatchCmd::CountryCodeReq { callback } => {
@@ -293,4 +369,10 @@ fn parse_country_code(msg: ShannonMsg) -> Result<String, Error> {
     String::from_utf8(msg.payload)
         .ok()
         .ok_or(Error::UnexpectedResponse)
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(error: serde_json::Error) -> Self {
+        Error::JsonError(Box::new(error))
+    }
 }
