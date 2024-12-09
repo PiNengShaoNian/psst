@@ -44,6 +44,10 @@ impl<D: Data + Default, T: Data, E: Data> Promise<T, D, E> {
         *self = Self::Deferred { def: D::default() }
     }
 
+    pub fn defer(&mut self, def: D) {
+        *self = Self::Deferred { def };
+    }
+
     pub fn resolve(&mut self, def: D, val: T) {
         *self = Self::Resolved { def, val };
     }
@@ -56,6 +60,17 @@ impl<D: Data + Default, T: Data, E: Data> Promise<T, D, E> {
         match res {
             Ok(val) => self.resolve(def, val),
             Err(err) => self.reject(def, err),
+        }
+    }
+
+    pub fn update(&mut self, (def, res): (D, Result<T, E>))
+    where
+        D: PartialEq,
+    {
+        if self.is_deferred(&def) {
+            self.resolve_or_reject(def, res);
+        } else {
+            // Ignore.
         }
     }
 }

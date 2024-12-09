@@ -1,9 +1,12 @@
+use std::fmt;
+
 use druid::{
     lens::{Field, Map},
+    widget::ListIter,
     Data, Lens, LensExt,
 };
 
-use super::Promise;
+use crate::data::Promise;
 
 #[derive(Clone, Data)]
 pub struct Ctx<C, T> {
@@ -27,6 +30,13 @@ where
     pub fn data() -> impl Lens<Self, T> {
         Field::new(|c: &Self| &c.data, |c: &mut Self| &mut c.data)
     }
+
+    pub fn map<U>(map: impl Lens<T, U>) -> impl Lens<Self, Ctx<C, U>>
+    where
+        U: Data,
+    {
+        CtxMap { map }
+    }
 }
 
 struct CtxMake<CL, TL> {
@@ -42,7 +52,7 @@ where
     CL: Lens<S, C>,
     TL: Lens<S, T>,
 {
-    fn with<V, F: FnOnce(&Ctx<C, T>) -> V>(&self, data: &S, f: F) -> V
+    fn with<V, F>(&self, data: &S, f: F) -> V
     where
         F: FnOnce(&Ctx<C, T>) -> V,
     {
@@ -52,7 +62,7 @@ where
         f(&ct)
     }
 
-    fn with_mut<V, F: FnOnce(&mut Ctx<C, T>) -> V>(&self, data: &mut S, f: F) -> V
+    fn with_mut<V, F>(&self, data: &mut S, f: F) -> V
     where
         F: FnOnce(&mut Ctx<C, T>) -> V,
     {
@@ -63,6 +73,43 @@ where
         self.cl.put(data, ct.ctx);
         self.tl.put(data, ct.data);
         v
+    }
+}
+
+struct CtxMap<Map> {
+    map: Map,
+}
+
+impl<C, T, U, Map> Lens<Ctx<C, T>, Ctx<C, U>> for CtxMap<Map>
+where
+    C: Data,
+    T: Data,
+    U: Data,
+    Map: Lens<T, U>,
+{
+    fn with<V, F>(&self, c: &Ctx<C, T>, f: F) -> V
+    where
+        F: FnOnce(&Ctx<C, U>) -> V,
+    {
+        self.map.with(&c.data, |u| {
+            let cu = Ctx::new(c.ctx.to_owned(), u.to_owned());
+            f(&cu)
+        })
+    }
+
+    fn with_mut<V, F>(&self, c: &mut Ctx<C, T>, f: F) -> V
+    where
+        F: FnOnce(&mut Ctx<C, U>) -> V,
+    {
+        let t = &mut c.data;
+        let c = &mut c.ctx;
+        self.map.with_mut(t, |u| {
+            let mut cu = Ctx::new(c.to_owned(), u.to_owned());
+            let v = f(&mut cu);
+            *c = cu.ctx;
+            *u = cu.data;
+            v
+        })
     }
 }
 
@@ -105,5 +152,56 @@ where
                 }
             },
         )
+    }
+}
+
+impl<C, T, L> ListIter<Ctx<C, T>> for Ctx<C, L>
+where
+    C: Data,
+    T: Data,
+    L: ListIter<T>,
+{
+    fn for_each(&self, mut cb: impl FnMut(&Ctx<C, T>, usize)) {
+        self.data.for_each(|item, index| {
+            let d = Ctx::new(self.ctx.to_owned(), item.to_owned());
+            cb(&d, index);
+        });
+    }
+
+    fn for_each_mut(&mut self, mut cb: impl FnMut(&mut Ctx<C, T>, usize)) {
+        let ctx = &mut self.ctx;
+        let data = &mut self.data;
+        data.for_each_mut(|item, index| {
+            let mut d = Ctx::new(ctx.to_owned(), item.to_owned());
+            cb(&mut d, index);
+            if !ctx.same(&d.ctx) {
+                *ctx = d.ctx;
+            }
+            if !item.same(&d.data) {
+                *item = d.data;
+            }
+        });
+    }
+
+    fn data_len(&self) -> usize {
+        self.data.data_len()
+    }
+}
+
+impl<C, L> fmt::Debug for Ctx<C, L>
+where
+    L: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.data.fmt(f)
+    }
+}
+
+impl<C, L> PartialEq for Ctx<C, L>
+where
+    L: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.data.eq(&other.data)
     }
 }

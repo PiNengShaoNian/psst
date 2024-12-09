@@ -1974,6 +1974,8 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "oauth2",
+ "once_cell",
+ "parking_lot",
  "psst-protocol",
  "quick-protobuf",
  "rand",
@@ -2000,6 +2002,7 @@ dependencies = [
  "psst-core",
  "serde",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]
@@ -2880,6 +2883,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
+ "socks",
  "url",
  "webpki-roots 0.26.6",
 ]

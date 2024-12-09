@@ -1,8 +1,10 @@
 pub mod config;
 mod ctx;
 mod nav;
+mod playback;
 mod playlist;
 mod promise;
+pub mod utils;
 
 use std::{
     fmt::Display,
@@ -21,6 +23,7 @@ pub use crate::data::{
 };
 use config::{Authentication, Preferences, PreferencesTab};
 use druid::{im::Vector, Data, Lens};
+use playback::Playback;
 use psst_core::session::SessionService;
 
 pub use crate::data::config::Config;
@@ -31,6 +34,7 @@ pub struct AppState {
     pub session: SessionService,
     pub config: Config,
     pub preferences: Preferences,
+    pub playback: Playback,
     pub library: Arc<Library>,
     pub common_ctx: Arc<CommonCtx>,
     pub alerts: Vector<Alert>,
@@ -42,8 +46,10 @@ impl AppState {
             playlists: Promise::Empty,
         });
         let common_ctx = Arc::new(CommonCtx {
+            library: Arc::clone(&library),
             show_track_cover: config.show_track_cover,
         });
+        let playback = Playback { now_playing: None };
         Self {
             session: SessionService::empty(),
             config,
@@ -56,10 +62,28 @@ impl AppState {
                     result: Promise::Empty,
                 },
             },
+            playback,
             library,
             common_ctx,
             alerts: Vector::new(),
         }
+    }
+}
+
+impl AppState {
+    pub fn common_ctx_mut(&mut self) -> &mut CommonCtx {
+        Arc::make_mut(&mut self.common_ctx)
+    }
+    pub fn with_library_mut(&mut self, func: impl FnOnce(&mut Library)) {
+        func(Arc::make_mut(&mut self.library));
+        self.library_update();
+    }
+
+    fn library_update(&mut self) {
+        if let Some(now_playing) = &mut self.playback.now_playing {
+            now_playing.library = Arc::clone(&self.library);
+        }
+        self.common_ctx_mut().library = Arc::clone(&self.library);
     }
 }
 
@@ -83,8 +107,9 @@ pub struct Library {
     pub playlists: Promise<Vector<Playlist>>,
 }
 
-#[derive(Clone, Data)]
+#[derive(Clone, Data, Lens)]
 pub struct CommonCtx {
+    pub library: Arc<Library>,
     pub show_track_cover: bool,
 }
 

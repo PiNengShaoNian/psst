@@ -1,4 +1,5 @@
 mod cmd;
+mod controller;
 mod data;
 mod delegate;
 mod error;

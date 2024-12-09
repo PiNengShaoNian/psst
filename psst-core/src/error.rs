@@ -15,7 +15,7 @@ pub enum Error {
     ResamplingError(i32),
     IoError(io::Error),
     SendError,
-    ProtobufError
+    ProtobufError,
 }
 
 impl error::Error for Error {}
@@ -51,7 +51,7 @@ impl fmt::Display for Error {
             | Self::AudioProbeError(err) => err.fmt(f),
             Self::IoError(err) => err.fmt(f),
             Self::SendError => write!(f, "Failed to send into a channel"),
-            Self::ProtobufError => write!(f, "ProtobufError")
+            Self::ProtobufError => write!(f, "ProtobufError"),
         }
     }
 }
@@ -65,11 +65,5 @@ impl From<io::Error> for Error {
 impl<T> From<crossbeam_channel::SendError<T>> for Error {
     fn from(_: crossbeam_channel::SendError<T>) -> Self {
         Error::SendError
-    }
-}
-
-impl From<quick_protobuf::Error> for Error {
-    fn from(_: quick_protobuf::Error) -> Self {
-        Error::ProtobufError
     }
 }

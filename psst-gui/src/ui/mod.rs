@@ -1,7 +1,12 @@
+pub mod playlist;
 pub mod preferences;
 pub mod theme;
+pub mod utils;
 
-use druid::{widget::SizedBox, Widget, WidgetExt, WindowDesc};
+use druid::{
+    widget::{Scroll, SizedBox},
+    Widget, WidgetExt, WindowDesc,
+};
 
 use crate::{
     data::{AppState, Config},
@@ -46,5 +51,8 @@ fn account_setup_widget() -> impl Widget<AppState> {
 }
 
 fn root_widget() -> impl Widget<AppState> {
-    SizedBox::empty()
+    let playlists = Scroll::new(playlist::list_widget())
+        .vertical()
+        .expand_height();
+    playlists
 }
