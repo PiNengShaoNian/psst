@@ -1,6 +1,6 @@
 use druid::{
-    widget::{Label, LineBreaking, List},
-    Insets, LensExt, LocalizedString, Menu, MenuItem, Selector, Widget, WidgetExt,
+    widget::{Button, Flex, Label, LineBreaking, List},
+    Insets, LensExt, LocalizedString, Menu, MenuItem, Selector, Widget, WidgetExt, WindowDesc,
 };
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     data::{AppState, Ctx, Library, Nav, Playlist, PlaylistLink, WithCtx},
     error::Error,
     webapi::WebApi,
-    widget::{Async, MyWidgetExt},
+    widget::{theme::ThemeScope, Async, MyWidgetExt},
 };
 
 use super::{theme, utils};
@@ -64,6 +64,94 @@ pub fn list_widget() -> impl Widget<AppState> {
         |_, data, d| data.with_library_mut(|l| l.playlists.defer(d)),
         |_, data, r| data.with_library_mut(|l| l.playlists.update(r)),
     )
+    .on_command(SHOW_UNFOLLOW_PLAYLIST_CONFIRM, |ctx, msg, _| {
+        let window = unfollow_confirm_window(msg.clone());
+        ctx.new_window(window);
+    })
+}
+
+fn unfollow_confirm_window(msg: UnfollowPlaylist) -> WindowDesc<AppState> {
+    let win = WindowDesc::new(unfollow_playlist_confirm_widget(msg))
+        .window_size((theme::grid(45.0), theme::grid(25.0)))
+        .title("Unfollow playlist")
+        .resizable(false)
+        .show_title(false)
+        .transparent_titlebar(true);
+
+    win
+}
+
+fn unfollow_playlist_confirm_widget(msg: UnfollowPlaylist) -> impl Widget<AppState> {
+    let link = msg.link;
+
+    let information_section = if msg.created_by_user {
+        information_section(
+            format!("Delete {} from Library?", link.name).as_str(),
+            "This will delete the playlist from Your Library",
+        )
+    } else {
+        information_section(
+            format!("Remove {} from Library?", link.name).as_str(),
+            "We'll remove this playlist from Your Library, but you'll still be able to search for it on Spotify",
+        )
+    };
+
+    let button_section = button_section(
+        "Delete",
+        UNFOLLOW_PLAYLIST_CONFIRM,
+        Box::new(move || link.clone()),
+    );
+
+    ThemeScope::new(
+        Flex::column()
+            .with_child(information_section)
+            .with_flex_spacer(2.0)
+            .with_child(button_section)
+            .with_flex_spacer(2.0)
+            .background(theme::BACKGROUND_DARK),
+    )
+}
+
+fn button_section(
+    action_button_name: &str,
+    selector: Selector<PlaylistLink>,
+    link_extractor: Box<dyn Fn() -> PlaylistLink>,
+) -> impl Widget<AppState> {
+    let action_button = Button::new(action_button_name)
+        .fix_height(theme::grid(5.0))
+        .fix_width(theme::grid(9.0))
+        .on_click(move |ctx, _, _| {
+            ctx.submit_command(selector.with(link_extractor()));
+            ctx.window().close();
+        });
+    let cancel_button = Button::new("Cancel")
+        .fix_height(theme::grid(5.0))
+        .fix_width(theme::grid(8.0))
+        .padding_left(theme::grid(3.0))
+        .padding_right(theme::grid(2.0))
+        .on_click(|ctx, _, _| ctx.window().close());
+
+    Flex::row()
+        .with_child(action_button)
+        .with_child(cancel_button)
+        .align_right()
+}
+
+fn information_section(title_msg: &str, description_msg: &str) -> impl Widget<AppState> {
+    let title_label = Label::new(title_msg)
+        .with_text_size(theme::TEXT_SIZE_LARGE)
+        .align_left()
+        .padding(theme::grid(2.0));
+
+    let description_label = Label::new(description_msg)
+        .with_line_break_mode(LineBreaking::WordWrap)
+        .with_text_size(theme::TEXT_SIZE_NORMAL)
+        .align_left()
+        .padding(theme::grid(2.0));
+
+    Flex::column()
+        .with_child(title_label)
+        .with_child(description_label)
 }
 
 fn playlist_menu_ctx(playlist: &WithCtx<Playlist>) -> Menu<AppState> {

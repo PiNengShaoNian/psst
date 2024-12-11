@@ -6,8 +6,8 @@ pub mod theme;
 use std::sync::Arc;
 
 use druid::{
-    widget::ControllerHost, Cursor, Data, Env, EventCtx, Menu, MouseButton, MouseEvent, Selector,
-    Widget,
+    widget::{ControllerHost, Padding},
+    Cursor, Data, Env, EventCtx, Insets, Menu, MouseButton, MouseEvent, Selector, Widget,
 };
 pub use link::Link;
 pub use promise::Async;
@@ -20,6 +20,18 @@ use crate::{
 pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
     fn link(self) -> Link<T> {
         Link::new(self)
+    }
+
+    fn padding_left(self, p: f64) -> Padding<T, Self> {
+        Padding::new(Insets::new(p, 0.0, 0.0, 0.0), self)
+    }
+
+    fn padding_right(self, p: f64) -> Padding<T, Self> {
+        Padding::new(Insets::new(0.0, 0.0, p, 0.0), self)
+    }
+
+    fn padding_horizontal(self, p: f64) -> Padding<T, Self> {
+        Padding::new(Insets::new(p, 0.0, p, 0.0), self)
     }
 
     fn on_left_click(
