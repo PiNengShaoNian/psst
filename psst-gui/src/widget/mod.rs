@@ -13,7 +13,7 @@ pub use link::Link;
 pub use promise::Async;
 
 use crate::{
-    controller::{ExClick, ExCursor, OnCommandAsync},
+    controller::{ExClick, ExCursor, OnCommand, OnCommandAsync},
     data::AppState,
 };
 
@@ -47,6 +47,18 @@ pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
 
     fn with_cursor(self, cursor: Cursor) -> ControllerHost<Self, ExCursor<T>> {
         ControllerHost::new(self, ExCursor::new(cursor))
+    }
+
+    fn on_command<U, F>(
+        self,
+        selector: Selector<U>,
+        func: F,
+    ) -> ControllerHost<Self, OnCommand<U, F>>
+    where
+        U: 'static,
+        F: Fn(&mut EventCtx, &U, &mut T),
+    {
+        ControllerHost::new(self, OnCommand::new(selector, func))
     }
 
     fn on_command_async<U: Data + Send, V: Data + Send>(
