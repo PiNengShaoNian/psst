@@ -20,10 +20,14 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use mercury::{MercuryDispatcher, MercuryRequest, MercuryResponse};
 
 use crate::{
-    audio::decrypt::AudioKey, connection::{
+    audio::decrypt::AudioKey,
+    connection::{
         shannon_codec::{ShannonDecoder, ShannonEncoder, ShannonMsg},
         Credentials, Transport,
-    }, error::Error, item_id::{FileId, ItemId}, util::deserialize_protobuf
+    },
+    error::Error,
+    item_id::{FileId, ItemId},
+    util::deserialize_protobuf,
 };
 
 /// Configuration values needed to open the session connection.
@@ -54,6 +58,13 @@ impl SessionService {
         }
     }
 
+    /// Replace the active session config.  If a session is already connected,
+    /// shut it down and wait until it's terminated.
+    pub fn update_config(&self, config: SessionConfig) {
+        self.config.lock().replace(config);
+        self.shutdown();
+    }
+
     /// Return a handle for the connected session.  In case no connection is
     /// open, *synchronously* connect, start the worker and keep it as active.
     /// Although a lock is held for the whole duration  of connection setup,
@@ -78,6 +89,14 @@ impl SessionService {
             .as_ref()
             .map(SessionWorker::handle)
             .ok_or(Error::SessionDisconnected)
+    }
+
+    /// Signal a shutdown to the active worker and wait until it terminates.
+    pub fn shutdown(&self) {
+        if let Some(worker) = self.connected.lock().take() {
+            worker.handle().request_shutdown();
+            worker.join();
+        }
     }
 }
 
@@ -167,7 +186,6 @@ impl SessionWorker {
         self.terminated.load(Ordering::SeqCst)
     }
 }
-
 
 #[derive(Clone)]
 pub struct SessionHandle {

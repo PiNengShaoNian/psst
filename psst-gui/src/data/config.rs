@@ -172,6 +172,13 @@ impl Config {
             .and_then(|c| c.username.as_deref())
     }
 
+    pub fn session(&self) -> SessionConfig {
+        SessionConfig {
+            login_creds: self.credentials.clone().expect("Missing credentials"),
+            proxy_url: Config::proxy(),
+        }
+    }
+
     pub fn proxy() -> Option<String> {
         env::var(PROXY_ENV_VAR).map_or_else(
             |err| match err {

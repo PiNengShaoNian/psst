@@ -9,6 +9,7 @@ use druid::{
 };
 
 use crate::{
+    controller::SessionController,
     data::{AppState, Config},
     widget::theme::ThemeScope,
 };
@@ -54,5 +55,6 @@ fn root_widget() -> impl Widget<AppState> {
     let playlists = Scroll::new(playlist::list_widget())
         .vertical()
         .expand_height();
-    playlists
+
+    ThemeScope::new(playlists).controller(SessionController)
 }
