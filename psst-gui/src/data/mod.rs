@@ -4,6 +4,7 @@ mod nav;
 mod playback;
 mod playlist;
 mod promise;
+mod user;
 pub mod utils;
 
 use std::{
@@ -25,6 +26,7 @@ use config::{Authentication, Preferences, PreferencesTab};
 use druid::{im::Vector, Data, Lens};
 use playback::Playback;
 use psst_core::session::SessionService;
+use user::UserProfile;
 
 pub use crate::data::config::Config;
 
@@ -43,6 +45,7 @@ pub struct AppState {
 impl AppState {
     pub fn default_with_config(config: Config) -> Self {
         let library = Arc::new(Library {
+            user_profile: Promise::Empty,
             playlists: Promise::Empty,
         });
         let common_ctx = Arc::new(CommonCtx {
@@ -104,7 +107,26 @@ impl AppState {
 
 #[derive(Clone, Data, Lens)]
 pub struct Library {
+    pub user_profile: Promise<UserProfile>,
     pub playlists: Promise<Vector<Playlist>>,
+}
+
+impl Library {
+    pub fn is_created_by_user(&self, playlist: &Playlist) -> bool {
+        if let Some(profile) = self.user_profile.resolved() {
+            profile.id == playlist.owner.id
+        } else {
+            false
+        }
+    }
+
+    pub fn contains_playlist(&self, playlist: &Playlist) -> bool {
+        if let Some(playlists) = self.playlists.resolved() {
+            playlists.iter().any(|p| p.id == playlist.id)
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Data, Lens)]

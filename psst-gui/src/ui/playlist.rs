@@ -1,11 +1,11 @@
 use druid::{
     widget::{Label, LineBreaking, List},
-    Insets, LensExt, Menu, Selector, Widget, WidgetExt,
+    Insets, LensExt, LocalizedString, Menu, MenuItem, Selector, Widget, WidgetExt,
 };
 
 use crate::{
     cmd,
-    data::{AppState, Ctx, Library, Nav, Playlist, WithCtx},
+    data::{AppState, Ctx, Library, Nav, Playlist, PlaylistLink, WithCtx},
     error::Error,
     webapi::WebApi,
     widget::{Async, MyWidgetExt},
@@ -14,6 +14,20 @@ use crate::{
 use super::{theme, utils};
 
 pub const LOAD_LIST: Selector = Selector::new("app.playlist.load-list");
+
+pub const FOLLOW_PLAYLIST: Selector<Playlist> = Selector::new("app.playlist.follow");
+pub const UNFOLLOW_PLAYLIST: Selector<PlaylistLink> = Selector::new("app.playlist.unfollow");
+pub const UNFOLLOW_PLAYLIST_CONFIRM: Selector<PlaylistLink> =
+    Selector::new("app.playlist.unfollow-confirm");
+
+pub const RENAME_PLAYLIST: Selector<PlaylistLink> = Selector::new("app.playlist.rename");
+pub const RENAME_PLAYLIST_CONFIRM: Selector<PlaylistLink> =
+    Selector::new("app.playlist.rename-confirm");
+
+const SHOW_RENAME_PLAYLIST_CONFIRM: Selector<PlaylistLink> =
+    Selector::new("app.playlist.show-rename");
+const SHOW_UNFOLLOW_PLAYLIST_CONFIRM: Selector<UnfollowPlaylist> =
+    Selector::new("app.playlist.show-unfollow-confirm");
 
 pub fn list_widget() -> impl Widget<AppState> {
     Async::new(
@@ -53,6 +67,67 @@ pub fn list_widget() -> impl Widget<AppState> {
 }
 
 fn playlist_menu_ctx(playlist: &WithCtx<Playlist>) -> Menu<AppState> {
-    // TODO
-    Menu::empty()
+    let library = &playlist.ctx.library;
+    let playlist = &playlist.data;
+
+    let mut menu = Menu::empty();
+
+    menu = menu.entry(
+        MenuItem::new(
+            LocalizedString::new("menu-item-copy-link").with_placeholder("Copy Link to Playlist"),
+        )
+        .command(cmd::COPY.with(playlist.url())),
+    );
+
+    if library.contains_playlist(playlist) {
+        let created_by_user = library.is_created_by_user(playlist);
+
+        if created_by_user {
+            let unfollow_msg = UnfollowPlaylist {
+                link: playlist.link(),
+                created_by_user,
+            };
+            menu = menu.entry(
+                MenuItem::new(
+                    LocalizedString::new("menu-unfollow-playlist")
+                        .with_placeholder("Delete playlist"),
+                )
+                .command(SHOW_UNFOLLOW_PLAYLIST_CONFIRM.with(unfollow_msg)),
+            );
+            menu = menu.entry(
+                MenuItem::new(
+                    LocalizedString::new("menu-rename-playlist")
+                        .with_placeholder("Rename playlist"),
+                )
+                .command(SHOW_RENAME_PLAYLIST_CONFIRM.with(playlist.link())),
+            );
+        } else {
+            let unfollow_msg = UnfollowPlaylist {
+                link: playlist.link(),
+                created_by_user,
+            };
+            menu = menu.entry(
+                MenuItem::new(
+                    LocalizedString::new("menu-unfollow-playlist")
+                        .with_placeholder("Remove playlist from Your Library"),
+                )
+                .command(SHOW_UNFOLLOW_PLAYLIST_CONFIRM.with(unfollow_msg)),
+            );
+        }
+    } else {
+        menu = menu.entry(
+            MenuItem::new(
+                LocalizedString::new("menu-follow-playlist").with_placeholder("Follow Playlist"),
+            )
+            .command(FOLLOW_PLAYLIST.with(playlist.clone())),
+        )
+    }
+
+    menu
+}
+
+#[derive(Clone)]
+struct UnfollowPlaylist {
+    link: PlaylistLink,
+    created_by_user: bool,
 }
