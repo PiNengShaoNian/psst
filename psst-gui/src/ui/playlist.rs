@@ -1,6 +1,9 @@
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
 use druid::{
-    widget::{Button, Flex, Label, LineBreaking, List},
-    Insets, LensExt, LocalizedString, Menu, MenuItem, Selector, Widget, WidgetExt, WindowDesc,
+    widget::{Button, Flex, Label, LensWrap, LineBreaking, List, TextBox},
+    Insets, Lens, LensExt, LocalizedString, Menu, MenuItem, Selector, Widget, WidgetExt,
+    WindowDesc,
 };
 
 use crate::{
@@ -68,6 +71,10 @@ pub fn list_widget() -> impl Widget<AppState> {
         let window = unfollow_confirm_window(msg.clone());
         ctx.new_window(window);
     })
+    .on_command(SHOW_RENAME_PLAYLIST_CONFIRM, |ctx, link, _| {
+        let window = rename_playlist_window(link.clone());
+        ctx.new_window(window);
+    })
 }
 
 fn unfollow_confirm_window(msg: UnfollowPlaylist) -> WindowDesc<AppState> {
@@ -105,6 +112,66 @@ fn unfollow_playlist_confirm_widget(msg: UnfollowPlaylist) -> impl Widget<AppSta
     ThemeScope::new(
         Flex::column()
             .with_child(information_section)
+            .with_flex_spacer(2.0)
+            .with_child(button_section)
+            .with_flex_spacer(2.0)
+            .background(theme::BACKGROUND_DARK),
+    )
+}
+
+fn rename_playlist_window(link: PlaylistLink) -> WindowDesc<AppState> {
+    let win = WindowDesc::new(rename_playlist_widget(link))
+        .window_size((theme::grid(45.0), theme::grid(30.0)))
+        .title("Rename playlist")
+        .resizable(false)
+        .show_title(false)
+        .transparent_titlebar(true);
+    win
+}
+
+#[derive(Clone, Lens)]
+struct TextInput {
+    input: Rc<RefCell<String>>,
+}
+
+impl Lens<AppState, String> for TextInput {
+    fn with<V, F: FnOnce(&String) -> V>(&self, data: &AppState, f: F) -> V {
+        f(&self.input.borrow())
+    }
+
+    fn with_mut<V, F: FnOnce(&mut String) -> V>(&self, data: &mut AppState, f: F) -> V {
+        f(&mut self.input.borrow_mut())
+    }
+}
+
+fn rename_playlist_widget(link: PlaylistLink) -> impl Widget<AppState> {
+    let text_input = TextInput {
+        input: Rc::new(RefCell::new(link.name.to_string())),
+    };
+
+    let information_section = information_section(
+        "Rename playlist?",
+        "Please enter a new name for your playlist",
+    );
+    let input_section = LensWrap::new(
+        TextBox::new()
+            .padding_horizontal(theme::grid(2.0))
+            .expand_width(),
+        text_input.clone(),
+    );
+    let button_section = button_section(
+        "Rename",
+        RENAME_PLAYLIST_CONFIRM,
+        Box::new(move || PlaylistLink {
+            id: link.id.clone(),
+            name: Arc::from(text_input.input.borrow().clone().into_boxed_str()),
+        }),
+    );
+
+    ThemeScope::new(
+        Flex::column()
+            .with_child(information_section)
+            .with_child(input_section)
             .with_flex_spacer(2.0)
             .with_child(button_section)
             .with_flex_spacer(2.0)
