@@ -4,6 +4,7 @@ use crate::data::Nav;
 
 // Common
 pub const SHOW_MAIN: Selector = Selector::new("app.show-main");
+pub const SET_FOCUS: Selector = Selector::new("app.set-focus");
 pub const COPY: Selector<String> = Selector::new("app.copy-to-clipboard");
 
 // Session
