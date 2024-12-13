@@ -1,3 +1,4 @@
+mod dispatcher;
 pub mod icons;
 mod link;
 mod promise;
