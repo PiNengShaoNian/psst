@@ -4,7 +4,7 @@ mod link;
 mod promise;
 pub mod theme;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use druid::{
     widget::{ControllerHost, Padding},
@@ -14,8 +14,8 @@ pub use link::Link;
 pub use promise::Async;
 
 use crate::{
-    controller::{ExClick, ExCursor, OnCommand, OnCommandAsync},
-    data::AppState,
+    controller::{ExClick, ExCursor, ExScroll, OnCommand, OnCommandAsync, OnDebounce},
+    data::{AppState, SliderScrollScale},
 };
 
 pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
@@ -33,6 +33,14 @@ pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
 
     fn padding_horizontal(self, p: f64) -> Padding<T, Self> {
         Padding::new(Insets::new(p, 0.0, p, 0.0), self)
+    }
+
+    fn on_debounce(
+        self,
+        duration: Duration,
+        handler: impl Fn(&mut EventCtx, &mut T, &Env) + 'static,
+    ) -> ControllerHost<Self, OnDebounce<T>> {
+        ControllerHost::new(self, OnDebounce::trailing(duration, handler))
     }
 
     fn on_left_click(
@@ -56,6 +64,14 @@ pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
         func: impl Fn(&mut EventCtx, &MouseEvent, &mut T, &Env) + 'static,
     ) -> ControllerHost<Self, ExClick<T>> {
         ControllerHost::new(self, ExClick::new(Some(button), func))
+    }
+
+    fn on_scroll(
+        self,
+        scale_picker: impl Fn(&mut T) -> &SliderScrollScale + 'static,
+        action: impl Fn(&mut EventCtx, &mut T, &Env, f64) + 'static,
+    ) -> ControllerHost<Self, ExScroll<T>> {
+        ControllerHost::new(self, ExScroll::new(scale_picker, action))
     }
 
     fn with_cursor(self, cursor: Cursor) -> ControllerHost<Self, ExCursor<T>> {

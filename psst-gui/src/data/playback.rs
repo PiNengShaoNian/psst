@@ -7,6 +7,7 @@ use super::Library;
 #[derive(Clone, Data, Lens)]
 pub struct Playback {
     pub now_playing: Option<NowPlaying>,
+    pub volume: f64,
 }
 
 #[derive(Clone, Data, Lens)]
