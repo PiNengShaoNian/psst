@@ -65,6 +65,13 @@ impl SessionService {
         self.shutdown();
     }
 
+    /// Returns true if a session worker is actively servicing the connected
+    /// session.  We return false here after any case of I/O errors or an
+    /// explicit session shutdown.
+    pub fn is_connected(&self) -> bool {
+        matches!(self.connected.lock().as_ref(), Some(worker) if !worker.has_terminated())
+    }
+
     /// Return a handle for the connected session.  In case no connection is
     /// open, *synchronously* connect, start the worker and keep it as active.
     /// Although a lock is held for the whole duration  of connection setup,

@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use ureq::{Agent, Request, Response};
 
 use crate::{
-    data::{utils::Page, Playlist},
+    data::{utils::Page, Playlist, UserProfile},
     error::Error,
 };
 
@@ -179,6 +179,16 @@ impl WebApi {
 
     pub fn global() -> Arc<Self> {
         GLOBAL_WEBAPI.get().unwrap().clone()
+    }
+}
+
+/// User endpoints.
+impl WebApi {
+    // https://developer.spotify.com/documentation/web-api/reference/get-users-profile
+    pub fn get_user_profile(&self) -> Result<UserProfile, Error> {
+        let request = self.get("v1/me", None)?;
+        let result = self.load(request)?;
+        Ok(result)
     }
 }
 

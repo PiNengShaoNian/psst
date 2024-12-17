@@ -15,6 +15,7 @@ parking_lot = { version = "0.12.3" }
 serde = { version = "1.0.210", features = ["derive", "rc"] }
 serde_json = { version = "1.0.132" }
 ureq = { version = "2.10.1", features = ["json", "socks-proxy"] }
+url = { version = "2.5.2" }
 
 # GUI
 druid = { git = "https://github.com/jpochyla/druid", branch = "psst", features = [

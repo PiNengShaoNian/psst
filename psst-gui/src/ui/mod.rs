@@ -2,6 +2,7 @@ pub mod playlist;
 pub mod preferences;
 pub mod search;
 pub mod theme;
+pub mod user;
 pub mod utils;
 
 use std::time::Duration;
@@ -15,7 +16,7 @@ use crate::{
     cmd,
     controller::SessionController,
     data::{AppState, Config, Nav, Playback},
-    widget::{theme::ThemeScope, MyWidgetExt},
+    widget::{theme::ThemeScope, Border, MyWidgetExt},
 };
 
 pub fn main_window(config: &Config) -> WindowDesc<AppState> {
@@ -68,9 +69,19 @@ fn root_widget() -> impl Widget<AppState> {
 
     let controls = Flex::column()
         .with_default_spacer()
-        .with_child(volume_slider());
+        .with_child(volume_slider())
+        .with_default_spacer()
+        .with_child(user::user_widget())
+        .center()
+        .fix_height(88.0)
+        .background(Border::Top.with_color(theme::GREY_500));
 
-    ThemeScope::new(playlists).controller(SessionController)
+    let sidebar = Flex::column()
+        .with_flex_child(playlists, 1.0)
+        .with_child(controls)
+        .background(theme::BACKGROUND_DARK);
+
+    ThemeScope::new(sidebar).controller(SessionController)
 }
 
 fn sidebar_menu_widget() -> impl Widget<AppState> {
