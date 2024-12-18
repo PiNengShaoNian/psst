@@ -32,6 +32,27 @@ pub fn main_window(config: &Config) -> WindowDesc<AppState> {
     }
 }
 
+pub fn preferences_window() -> WindowDesc<AppState> {
+    let win_size = (theme::grid(50.0), theme::grid(55.0));
+
+    // On Windows, the window size includes the titlebar.
+    let win_size = if cfg!(target_os = "windows") {
+        const WINDOWS_TITLEBAR_OFFSET: f64 = 56.0;
+        (win_size.0, win_size.1 + WINDOWS_TITLEBAR_OFFSET)
+    } else {
+        win_size
+    };
+
+    let win = WindowDesc::new(preferences_widget())
+        .title("Preferences")
+        .window_size(win_size)
+        .resizable(false)
+        .show_title(false)
+        .transparent_titlebar(true);
+
+    win
+}
+
 pub fn account_setup_window() -> WindowDesc<AppState> {
     let win = WindowDesc::new(account_setup_widget())
         .title("Login")
@@ -46,6 +67,14 @@ pub fn account_setup_window() -> WindowDesc<AppState> {
     } else {
         win
     }
+}
+
+fn preferences_widget() -> impl Widget<AppState> {
+    ThemeScope::new(
+        preferences::preferences_widget()
+            .background(theme::BACKGROUND_DARK)
+            .expand(),
+    )
 }
 
 fn account_setup_widget() -> impl Widget<AppState> {

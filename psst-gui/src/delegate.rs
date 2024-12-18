@@ -1,8 +1,10 @@
 use druid::{commands, AppDelegate, DelegateCtx, Handled, WindowId};
+use open::commands;
 
 use crate::{
     cmd,
-    data::{AppState, Config}, ui,
+    data::{AppState, Config},
+    ui,
 };
 
 pub struct Delegate {
@@ -44,6 +46,19 @@ impl Delegate {
             }
         }
     }
+
+    fn show_preferences(&mut self, ctx: &mut DelegateCtx) {
+        match self.preferences_window {
+            Some(id) => {
+                ctx.submit_command(commands::SHOW_WINDOW.to(id));
+            }
+            None => {
+                let window = ui::preferences_window();
+                self.preferences_window.replace(window.id);
+                ctx.new_window(window);
+            }
+        }
+    }
 }
 
 impl AppDelegate<AppState> for Delegate {
@@ -57,6 +72,9 @@ impl AppDelegate<AppState> for Delegate {
     ) -> druid::Handled {
         if cmd.is(cmd::SHOW_MAIN) {
             self.show_main(&data.config, ctx);
+            Handled::Yes
+        } else if cmd.is(commands::SHOW_PREFERENCES) {
+            self.show_preferences(ctx);
             Handled::Yes
         } else {
             Handled::No

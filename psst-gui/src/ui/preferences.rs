@@ -5,15 +5,25 @@ use std::{
 
 use druid::{
     commands,
-    widget::{Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking},
-    Event, Selector, Widget, WidgetExt,
+    widget::{
+        Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
+        RadioGroup, ViewSwitcher,
+    },
+    Event, LensExt, Selector, Widget, WidgetExt,
 };
-use log::info;
 use psst_core::{connection::Credentials, oauth, session::SessionConfig};
 
 use crate::{
     cmd,
-    data::{config::Authentication, AppState}, webapi::WebApi,
+    data::{
+        config::{Authentication, PreferencesTab, Theme},
+        AppState, Config,
+    },
+    webapi::WebApi,
+    widget::{
+        icons::{self, SvgIcon},
+        MyWidgetExt,
+    },
 };
 
 use super::theme;
@@ -39,6 +49,95 @@ pub fn account_setup_widget() -> impl Widget<AppState> {
         .with_spacer(theme::grid(6.0))
         .with_child(account_tab_widget(AccountTab::FirstSetup).expand_width())
         .padding(theme::grid(4.0))
+}
+
+pub fn preferences_widget() -> impl Widget<AppState> {
+    const PROPAGATE_FLAGS: Selector = Selector::new("app.preferences.propagate-flags");
+
+    Flex::column()
+        .must_fill_main_axis(true)
+        .cross_axis_alignment(CrossAxisAlignment::Fill)
+        .with_child(
+            tabs_widget()
+                .padding(theme::grid(2.0))
+                .background(theme::BACKGROUND_LIGHT),
+        )
+        .with_child(ViewSwitcher::new(
+            |state: &AppState, _| state.preferences.active,
+            |active, _, _| match active {
+                PreferencesTab::General => general_tab_widget().boxed(),
+                PreferencesTab::Account => account_tab_widget(AccountTab::InPreferences).boxed(),
+                PreferencesTab::Cache => todo!(),
+                PreferencesTab::About => todo!(),
+            },
+        ))
+}
+
+fn tabs_widget() -> impl Widget<AppState> {
+    Flex::row()
+        .must_fill_main_axis(true)
+        .main_axis_alignment(MainAxisAlignment::Center)
+        .with_child(tab_link_widget(
+            "General",
+            &icons::PREFERENCES,
+            PreferencesTab::General,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Account",
+            &icons::ACCOUNT,
+            PreferencesTab::Account,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Cache",
+            &icons::STORAGE,
+            PreferencesTab::Cache,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "About",
+            &icons::HEART,
+            PreferencesTab::About,
+        ))
+}
+
+fn tab_link_widget(
+    text: &'static str,
+    icon: &SvgIcon,
+    tab: PreferencesTab,
+) -> impl Widget<AppState> {
+    Flex::column()
+        .with_child(icon.scale(theme::ICON_SIZE_LARGE))
+        .with_default_spacer()
+        .with_child(Label::new(text).with_font(theme::UI_FONT_MEDIUM))
+        .padding(theme::grid(1.0))
+        .link()
+        .rounded(theme::BUTTON_BORDER_RADIUS)
+        .active(move |state: &AppState, _| tab == state.preferences.active)
+        .on_left_click(move |_, _, state: &mut AppState, _| {
+            state.preferences.active = tab;
+        })
+        .env_scope(|env, _| {
+            env.set(theme::LINK_ACTIVE_COLOR, env.get(theme::BACKGROUND_DARK));
+        })
+}
+
+fn general_tab_widget() -> impl Widget<AppState> {
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    // Theme
+    col = col
+        .with_child(Label::new("Theme").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            RadioGroup::column(vec![("Light", Theme::Light), ("Dark", Theme::Dark)])
+                .lens(AppState::config.then(Config::theme)),
+        );
+
+    col
 }
 
 #[derive(Copy, Clone)]
