@@ -16,13 +16,13 @@ use psst_core::{connection::Credentials, oauth, session::SessionConfig};
 use crate::{
     cmd,
     data::{
-        config::{Authentication, PreferencesTab, Theme},
+        config::{Authentication, Preferences, PreferencesTab, Theme},
         AppState, Config,
     },
     webapi::WebApi,
     widget::{
         icons::{self, SvgIcon},
-        MyWidgetExt,
+        Async, MyWidgetExt,
     },
 };
 
@@ -162,11 +162,26 @@ fn account_tab_widget(tab: AccountTab) -> impl Widget<AppState> {
         .with_child(Button::new("Log in with Spotify").on_click(|ctx, _, _| {
             ctx.submit_command(Authenticate::REQUEST);
         }))
-        .with_spacer(theme::grid(1.0));
-    // TODO
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Async::new(
+                || Label::new("Logging in...").with_text_size(theme::TEXT_SIZE_SMALL),
+                || Label::new("").with_text_size(theme::TEXT_SIZE_SMALL),
+                || {
+                    Label::dynamic(|err: &String, _| err.to_owned())
+                        .with_text_size(theme::TEXT_SIZE_SMALL)
+                        .with_text_color(theme::RED)
+                },
+            )
+            .lens(
+                AppState::preferences
+                    .then(Preferences::auth)
+                    .then(Authentication::result),
+            ),
+        );
 
     if matches!(tab, AccountTab::InPreferences) {
-        col = col.with_child(Button::new("Log Out").on_click(|ctx, _, _| {
+        col = col.with_child(Button::new("Log Out").on_left_click(|ctx, _, _, _| {
             ctx.submit_command(cmd::LOG_OUT);
         }))
     }
@@ -265,6 +280,14 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                     }
                 }
                 data.preferences.auth.access_token.clear();
+                ctx.set_handled();
+            }
+            Event::Command(cmd) if cmd.is(cmd::LOG_OUT) => {
+                data.config.clear_credentials();
+                data.config.save();
+                data.session.shutdown();
+                ctx.submit_command(cmd::CLOSE_ALL_WINDOWS);
+                ctx.submit_command(cmd::SHOW_ACCOUNT_SETUP);
                 ctx.set_handled();
             }
             _ => {

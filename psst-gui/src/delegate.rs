@@ -47,6 +47,19 @@ impl Delegate {
         }
     }
 
+    fn show_account_setup(&mut self, ctx: &mut DelegateCtx) {
+        match self.preferences_window {
+            Some(id) => {
+                ctx.submit_command(commands::SHOW_WINDOW.to(id));
+            }
+            None => {
+                let window = ui::account_setup_window();
+                self.preferences_window.replace(window.id);
+                ctx.new_window(window);
+            }
+        }
+    }
+
     fn show_preferences(&mut self, ctx: &mut DelegateCtx) {
         match self.preferences_window {
             Some(id) => {
@@ -58,6 +71,13 @@ impl Delegate {
                 ctx.new_window(window);
             }
         }
+    }
+
+    fn close_all_windows(&mut self, ctx: &mut DelegateCtx) {
+        ctx.submit_command(commands::CLOSE_ALL_WINDOWS);
+        self.main_window = None;
+        self.preferences_window = None;
+        self.credits_window = None;
     }
 }
 
@@ -73,8 +93,14 @@ impl AppDelegate<AppState> for Delegate {
         if cmd.is(cmd::SHOW_MAIN) {
             self.show_main(&data.config, ctx);
             Handled::Yes
+        } else if cmd.is(cmd::SHOW_ACCOUNT_SETUP) {
+            self.show_account_setup(ctx);
+            Handled::Yes
         } else if cmd.is(commands::SHOW_PREFERENCES) {
             self.show_preferences(ctx);
+            Handled::Yes
+        } else if cmd.is(cmd::CLOSE_ALL_WINDOWS) {
+            self.close_all_windows(ctx);
             Handled::Yes
         } else {
             Handled::No
