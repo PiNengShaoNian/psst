@@ -1,8 +1,8 @@
 use std::{
     env::{self, VarError},
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{BufReader, BufWriter},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use directories::ProjectDirs;
@@ -16,12 +16,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::theme;
 
-use super::promise::Promise;
+use super::{promise::Promise, Nav, SliderScrollScale};
 
 #[derive(Clone, Debug, Data, Lens)]
 pub struct Preferences {
     pub active: PreferencesTab,
+    pub cache_size: Promise<u64, (), ()>,
     pub auth: Authentication,
+}
+
+impl Preferences {
+    pub fn measure_cache_usage() -> Option<u64> {
+        Config::cache_dir().and_then(|path| get_dir_size(&path))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Data)]
@@ -70,8 +77,11 @@ pub struct Config {
     credentials: Option<Credentials>,
     pub audio_quality: AudioQuality,
     pub theme: Theme,
+    pub volume: f64,
+    pub last_route: Option<Nav>,
     pub show_track_cover: bool,
     pub window_size: Size,
+    pub slider_scroll_scale: SliderScrollScale,
     pub paginated_limit: usize,
 }
 
@@ -81,8 +91,11 @@ impl Default for Config {
             credentials: Default::default(),
             audio_quality: Default::default(),
             theme: Default::default(),
+            volume: 1.0,
+            last_route: Default::default(),
             show_track_cover: Default::default(),
             window_size: Size::new(theme::grid(80.0), theme::grid(100.0)),
+            slider_scroll_scale: Default::default(),
             paginated_limit: 500,
         }
     }
@@ -203,4 +216,16 @@ impl Default for Theme {
     fn default() -> Self {
         Self::Light
     }
+}
+
+fn get_dir_size(path: &Path) -> Option<u64> {
+    fs::read_dir(path).ok()?.try_fold(0, |acc, entry| {
+        let entry = entry.ok()?;
+        let size = if entry.file_type().ok()?.is_dir() {
+            get_dir_size(&entry.path())?
+        } else {
+            entry.metadata().ok()?.len()
+        };
+        Some(acc + size)
+    })
 }

@@ -64,6 +64,7 @@ impl AppState {
                     access_token: String::new(),
                     result: Promise::Empty,
                 },
+                cache_size: Promise::Empty,
             },
             playback,
             library,

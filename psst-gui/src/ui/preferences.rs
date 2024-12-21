@@ -9,7 +9,7 @@ use druid::{
         Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
         RadioGroup, ViewSwitcher,
     },
-    Event, LensExt, Selector, Widget, WidgetExt,
+    Event, LensExt, LifeCycle, Selector, Widget, WidgetExt,
 };
 use psst_core::{connection::Credentials, oauth, session::SessionConfig};
 
@@ -17,7 +17,7 @@ use crate::{
     cmd,
     data::{
         config::{Authentication, Preferences, PreferencesTab, Theme},
-        AppState, Config,
+        AppState, Config, Promise,
     },
     webapi::WebApi,
     widget::{
@@ -67,7 +67,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
             |active, _, _| match active {
                 PreferencesTab::General => general_tab_widget().boxed(),
                 PreferencesTab::Account => account_tab_widget(AccountTab::InPreferences).boxed(),
-                PreferencesTab::Cache => todo!(),
+                PreferencesTab::Cache => cache_tab_widget().boxed(),
                 PreferencesTab::About => todo!(),
             },
         ))
@@ -294,5 +294,101 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
                 child.event(ctx, event, data, env);
             }
         }
+    }
+}
+
+fn cache_tab_widget() -> impl Widget<AppState> {
+    let mut col = Flex::column().cross_axis_alignment(CrossAxisAlignment::Start);
+
+    col = col
+        .with_child(Label::new("Location").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::dynamic(|_, _| {
+                Config::cache_dir()
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "None".to_string())
+            })
+            .with_line_break_mode(LineBreaking::WordWrap),
+        );
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    col = col
+        .with_child(Label::new("Size").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(Label::dynamic(
+            |preferences: &Preferences, _| match preferences.cache_size {
+                Promise::Empty | Promise::Rejected { .. } => "Unknown".to_string(),
+                Promise::Deferred { .. } => "Computing".to_string(),
+                Promise::Resolved { val: 0, .. } => "Empty".to_string(),
+                Promise::Resolved { val, .. } => {
+                    format!("{:.2} MB", val as f64 / 1e6_f64)
+                }
+            },
+        ));
+
+    col.controller(MeasureCacheSize::new())
+        .lens(AppState::preferences)
+}
+
+struct MeasureCacheSize {
+    thread: Option<JoinHandle<()>>,
+}
+
+impl MeasureCacheSize {
+    fn new() -> Self {
+        Self { thread: None }
+    }
+}
+
+impl MeasureCacheSize {
+    const RESULT: Selector<Option<u64>> = Selector::new("app.preferences.measure-cache-size");
+}
+
+impl<W: Widget<Preferences>> Controller<Preferences, W> for MeasureCacheSize {
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::EventCtx,
+        event: &Event,
+        data: &mut Preferences,
+        env: &druid::Env,
+    ) {
+        match &event {
+            Event::Command(cmd) if cmd.is(Self::RESULT) => {
+                let result = cmd.get_unchecked(Self::RESULT).to_owned();
+                data.cache_size.resolve_or_reject((), result.ok_or(()));
+                self.thread.take();
+                ctx.set_handled();
+            }
+            _ => {
+                child.event(ctx, event, data, env);
+            }
+        }
+    }
+
+    fn lifecycle(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::LifeCycleCtx,
+        event: &druid::LifeCycle,
+        data: &Preferences,
+        env: &druid::Env,
+    ) {
+        if let LifeCycle::WidgetAdded = &event {
+            let handle = thread::spawn({
+                let widget_id = ctx.widget_id();
+                let event_sink = ctx.get_external_handle();
+                move || {
+                    let size = Preferences::measure_cache_usage();
+                    event_sink
+                        .submit_command(Self::RESULT, size, widget_id)
+                        .unwrap();
+                }
+            });
+            self.thread.replace(handle);
+        }
+        child.lifecycle(ctx, event, data, env);
     }
 }
